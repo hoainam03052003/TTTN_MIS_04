@@ -41,5 +41,26 @@ router.post(
     eventController.submitEvent
 );
 
+router.post(
+    "/:id/approve",
+    authenticate,
+    authorize("ADMINISTRATOR"),
+    eventController.approveEvent
+);
+
+router.post(
+    "/:id/reject",
+    authenticate,
+    authorize("ADMINISTRATOR"),
+    eventController.rejectEvent
+);
+
+router.post(
+    "/:id/publish",
+    authenticate,
+    authorize("ADMINISTRATOR"),
+    eventController.publishEvent
+);
+
 
 module.exports = router;

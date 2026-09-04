@@ -42,6 +42,9 @@ app.use(
 );
 
 
+const registrationRoutes = require("./routes/registration.routes");
+app.use("/api", registrationRoutes);
+
 app.use((req, res) => {
 
     res.status(404).json({

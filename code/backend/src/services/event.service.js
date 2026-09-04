@@ -1,4 +1,5 @@
 const pool = require("../config/database");
+const { writeAuditLog } = require("./audit.service");
 
 async function createEvent(data, organizerId) {
 
@@ -42,6 +43,14 @@ async function createEvent(data, organizerId) {
             quota
         ]
     );
+
+    await writeAuditLog({
+        userId: organizerId,
+        action: "CREATE_EVENT",
+        entity: "EVENT",
+        entityId: result.insertId,
+        description: `Tạo Event #${result.insertId} ở trạng thái DRAFT`
+    });
 
     return result.insertId;
 }
@@ -122,7 +131,108 @@ async function submitEvent(eventId, organizerId) {
         [eventId, organizerId]
     );
 
-    return result.affectedRows > 0;
+    if (result.affectedRows > 0) {
+        await writeAuditLog({
+            userId: organizerId,
+            action: "SUBMIT_EVENT",
+            entity: "EVENT",
+            entityId: eventId,
+            description: `Gửi Event #${eventId} chờ phê duyệt`
+        });
+        return true;
+    }
+
+    return false;
+}
+
+
+async function approveEvent(eventId, adminId) {
+    const [result] = await pool.execute(
+        `UPDATE events
+         SET status = 'APPROVED', rejection_reason = NULL
+         WHERE event_id = ? AND status = 'PENDING_APPROVAL'`,
+        [eventId]
+    );
+
+    if (result.affectedRows === 0) {
+        const [rows] = await pool.execute(
+            `SELECT event_id, status FROM events WHERE event_id = ?`,
+            [eventId]
+        );
+        if (rows.length === 0) return { code: "NOT_FOUND" };
+        return { code: "INVALID_STATUS", status: rows[0].status };
+    }
+
+    await writeAuditLog({
+        userId: adminId,
+        action: "APPROVE_EVENT",
+        entity: "EVENT",
+        entityId: eventId,
+        description: `Phê duyệt Event #${eventId}: PENDING_APPROVAL -> APPROVED`
+    });
+
+    return { code: "OK" };
+}
+
+
+async function rejectEvent(eventId, adminId, reason) {
+    const cleanReason = typeof reason === "string" ? reason.trim() : "";
+    if (!cleanReason) return { code: "REASON_REQUIRED" };
+
+    const [result] = await pool.execute(
+        `UPDATE events
+         SET status = 'REJECTED', rejection_reason = ?
+         WHERE event_id = ? AND status = 'PENDING_APPROVAL'`,
+        [cleanReason, eventId]
+    );
+
+    if (result.affectedRows === 0) {
+        const [rows] = await pool.execute(
+            `SELECT event_id, status FROM events WHERE event_id = ?`,
+            [eventId]
+        );
+        if (rows.length === 0) return { code: "NOT_FOUND" };
+        return { code: "INVALID_STATUS", status: rows[0].status };
+    }
+
+    await writeAuditLog({
+        userId: adminId,
+        action: "REJECT_EVENT",
+        entity: "EVENT",
+        entityId: eventId,
+        description: `Từ chối Event #${eventId}: ${cleanReason}`
+    });
+
+    return { code: "OK" };
+}
+
+
+async function publishEvent(eventId, adminId) {
+    const [result] = await pool.execute(
+        `UPDATE events
+         SET status = 'PUBLISHED'
+         WHERE event_id = ? AND status = 'APPROVED'`,
+        [eventId]
+    );
+
+    if (result.affectedRows === 0) {
+        const [rows] = await pool.execute(
+            `SELECT event_id, status FROM events WHERE event_id = ?`,
+            [eventId]
+        );
+        if (rows.length === 0) return { code: "NOT_FOUND" };
+        return { code: "INVALID_STATUS", status: rows[0].status };
+    }
+
+    await writeAuditLog({
+        userId: adminId,
+        action: "PUBLISH_EVENT",
+        entity: "EVENT",
+        entityId: eventId,
+        description: `Đăng tải Event #${eventId}: APPROVED -> PUBLISHED`
+    });
+
+    return { code: "OK" };
 }
 
 
@@ -130,5 +240,8 @@ module.exports = {
     createEvent,
     getEvents,
     getEventById,
-    submitEvent
+    submitEvent,
+    approveEvent,
+    rejectEvent,
+    publishEvent
 };
