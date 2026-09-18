@@ -1,0 +1,10 @@
+const express=require("express");
+const router=express.Router();
+const authenticate=require("../middlewares/auth.middleware");
+const authorize=require("../middlewares/role.middleware");
+const controller=require("../controllers/attendance.controller");
+router.post("/events/:id/attendance/checkin",authenticate,authorize("USER"),controller.checkin);
+router.get("/events/:id/attendance/my",authenticate,authorize("USER"),controller.mine);
+router.get("/events/:id/attendance",authenticate,authorize("ORGANIZER","ADMINISTRATOR"),controller.list);
+router.post("/events/:id/attendance/manual",authenticate,authorize("ORGANIZER","ADMINISTRATOR"),controller.manual);
+module.exports=router;
