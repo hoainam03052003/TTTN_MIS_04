@@ -1,0 +1,2 @@
+const express=require("express");const router=express.Router();const authenticate=require("../middlewares/auth.middleware");const authorize=require("../middlewares/role.middleware");const controller=require("../controllers/dashboard.controller");
+router.get("/user",authenticate,authorize("USER"),controller.user);router.get("/organizer",authenticate,authorize("ORGANIZER"),controller.organizer);router.get("/admin",authenticate,authorize("ADMINISTRATOR"),controller.admin);module.exports=router;
